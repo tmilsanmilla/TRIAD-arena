@@ -1,0 +1,5 @@
+# Triad Arena accounts
+
+The original game and its device-local maps remain in index.html. New shared accounts use Continue with Pixel Pulse through Better Auth's OIDC consumer with signed identity verification, PKCE, state, nonce, and seven-day revocable database sessions. Username/email come from Pixel Pulse; no password or Pixel administrator role is imported. Configure server-only DATABASE_URL and BETTER_AUTH_SECRET (32+ random characters) on the existing Vercel project. Account tables are additive in the separate triad-arena-accounts Neon database.
+
+Legacy Supabase sign-in is retained. Linking requires both a current Pixel-backed Triad session and an actual Supabase user token independently verified against the fixed legacy origin. Identity bindings are unique in both directions; email or username alone never links accounts. The original Supabase endpoint currently does not resolve, so existing-account verification may be unavailable until that service is restored. No legacy account or device-local map is deleted or overwritten.

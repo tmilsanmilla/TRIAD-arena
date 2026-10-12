@@ -62,6 +62,12 @@
   .swatch.selsw{border-color:var(--ink);box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--amber)}
   .swatch:hover{border-color:var(--amber)}
   .msg{font-size:13px;color:var(--dim);letter-spacing:2px;min-height:16px;text-align:center}
+  .pixel-signin{display:inline-block;padding:12px 18px;border:1px solid var(--amber);color:var(--amber);text-decoration:none;font-weight:700;font-size:13px;letter-spacing:1px;text-align:center}
+  .pixel-signin:hover,.pixel-signin:focus-visible{background:var(--amber);color:var(--bg)}
+  .pixel-note{max-width:360px;color:var(--dim);font-size:12px;line-height:1.5;text-align:center}
+  #legacyAccount{width:360px;max-width:92%;text-align:center}
+  #legacyAccount summary{cursor:pointer;color:var(--amber);padding:10px}
+  #legacyAccount .col{align-items:center}
   .d{color:var(--dim);font-size:11px;letter-spacing:1px;text-align:center}
   /* tutorial */
   #pgTut .tt{max-width:640px;font-size:12px;line-height:1.55}
@@ -118,13 +124,21 @@
     <!-- 0. LOGIN -->
     <div class="page" id="pgLogin">
       <div class="menu-title">TRIAD ARENA</div>
-      <div class="lbl">SIGN IN</div>
-      <input type="email" id="loginEmail" placeholder="email" autocomplete="email">
-      <input type="password" id="loginPass" placeholder="password" autocomplete="current-password">
-      <div class="row">
-        <button id="bSignIn">SIGN IN</button>
-        <button id="bSignUp">SIGN UP</button>
-      </div>
+      <a class="pixel-signin" id="pixelSignIn" href="/api/auth/start?intent=create">CONTINUE WITH PIXEL PULSE</a>
+      <p class="pixel-note" id="pixelNote">One shared username and email. Your password stays with Pixel Pulse. Already signed in there? Continue without entering it again.</p>
+      <details id="legacyAccount">
+        <summary>Existing Triad account — linking is highly recommended</summary>
+        <p class="pixel-note">Continue with Pixel Pulse first, then prove ownership here. No accounts are merged just because their email matches. Device-local maps stay on this device.</p>
+        <div class="col">
+          <input type="email" id="loginEmail" placeholder="existing account email" autocomplete="email">
+          <input type="password" id="loginPass" placeholder="existing account password" autocomplete="current-password">
+          <div class="row">
+            <button id="bSignIn">OLD ACCOUNT SIGN IN</button>
+            <button id="bSignUp">OLD ACCOUNT SIGN UP</button>
+          </div>
+          <button id="bLinkLegacy" hidden>LINK EXISTING ACCOUNT</button>
+        </div>
+      </details>
       <button class="mini" id="bGuest">PLAY AS GUEST</button>
       <div class="msg" id="loginMsg"></div>
     </div>
@@ -157,6 +171,7 @@
         <button class="big" id="bExitMain">EXIT TO MAIN MENU</button>
         <button id="bSignOut" style="display:none">SIGN OUT</button>
         <button id="bLoginFromSettings">SIGN IN / SIGN UP</button>
+        <button class="mini" id="bLinkFromSettings" hidden>LINK EXISTING TRIAD ACCOUNT</button>
       </div>
       <div class="d" id="acctLine"></div>
     </div>
@@ -731,7 +746,7 @@ buildControls();
 // ---------- auth (Supabase) ----------
 const SB_URL = 'https://sfvnmmcmobnoslkmmknb.supabase.co';
 const SB_KEY = 'sb_publishable_usL3aDIJDq7j_BByuIWwlA_1ImhXLx9';
-let sb = null, currentUser = null;
+let sb = null, currentUser = null, pixelUser = null;
 try { sb = window.supabase.createClient(SB_URL, SB_KEY); } catch(e){ sb = null; }
 
 const loginMsg = document.getElementById('loginMsg');
@@ -740,18 +755,40 @@ const bSignOut = document.getElementById('bSignOut');
 
 function setUser(u){
   currentUser = u;
-  acctLine.textContent = u ? ('signed in as ' + (u.email || 'player')) : 'playing as guest';
+  acctLine.textContent = u ? ('signed in as ' + (u.username || u.name || u.email || 'player')) : 'playing as guest';
   bSignOut.style.display = u ? '' : 'none';
   document.getElementById('bLoginFromSettings').style.display = u ? 'none' : '';
   document.getElementById('bLoginFromPlayers').style.display = u ? 'none' : '';
+  document.getElementById('bLinkFromSettings').hidden = !pixelUser;
+  document.getElementById('bLinkLegacy').hidden = !pixelUser;
 }
 document.getElementById('bLoginFromPlayers').onclick = () => { loginMsg.textContent = ''; showPage('login'); };
 document.getElementById('bLoginFromSettings').onclick = () => { loginMsg.textContent = ''; showPage('login'); };
+document.getElementById('bLinkFromSettings').onclick = () => { document.getElementById('legacyAccount').open = true; showPage('login'); };
 async function trySession(){
+  const query = new URLSearchParams(location.search);
+  try {
+    const response = await fetch('/api/auth/get-session', { credentials:'same-origin', cache:'no-store' });
+    const session = response.ok ? await response.json() : null;
+    if (session?.user){
+      pixelUser = session.user; setUser(pixelUser);
+      document.getElementById('pixelSignIn').textContent = 'CONTINUE AS ' + pixelUser.name;
+      document.getElementById('pixelSignIn').href = '/';
+      document.getElementById('pixelNote').textContent = '@' + pixelUser.name + ' · ' + pixelUser.email + ' — connected with Pixel Pulse';
+      if (query.get('pixel_action') === 'link'){ document.getElementById('legacyAccount').open = true; showPage('login'); }
+      else showPage('players');
+      return;
+    }
+  } catch(e){}
+  if (query.get('pixel_action') === 'link'){
+    document.getElementById('legacyAccount').open = true;
+    document.getElementById('pixelSignIn').href = '/api/auth/start?intent=link';
+  }
+  if (query.has('pixel_error')) loginMsg.textContent = 'Could not connect. Please try Continue with Pixel Pulse again.';
   if (!sb) return;
   try {
     const { data } = await sb.auth.getSession();
-    if (data && data.session){ setUser(data.session.user); showPage('players'); }
+    if (data && data.session){ setUser(data.session.user); if (query.get('pixel_action') !== 'link') showPage('players'); }
   } catch(e){}
 }
 trySession();
@@ -761,9 +798,12 @@ document.getElementById('bSignIn').onclick = async () => {
   loginMsg.textContent = 'signing in…';
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPass').value;
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if (error){ loginMsg.textContent = error.message.toLowerCase(); return; }
-  setUser(data.user); showPage('players');
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error){ loginMsg.textContent = error.message.toLowerCase(); return; }
+    document.getElementById('loginPass').value = '';
+    setUser(pixelUser || data.user); showPage('players');
+  } catch(e){ loginMsg.textContent = 'Old account service unavailable. Use Pixel Pulse or play as guest.'; }
 };
 document.getElementById('bSignUp').onclick = async () => {
   if (!sb){ loginMsg.textContent = 'auth unavailable — play as guest'; return; }
@@ -775,8 +815,36 @@ document.getElementById('bSignUp').onclick = async () => {
   if (data.session){ setUser(data.user); showPage('players'); }
   else loginMsg.textContent = 'check your email to confirm, then sign in';
 };
+document.getElementById('bLinkLegacy').onclick = async () => {
+  if (!pixelUser){ loginMsg.textContent = 'Continue with Pixel Pulse first.'; return; }
+  if (!sb){ loginMsg.textContent = 'Old account service unavailable. Your maps are unchanged.'; return; }
+  const button = document.getElementById('bLinkLegacy'); button.disabled = true;
+  loginMsg.textContent = 'Verifying your existing account…';
+  try {
+    const email = document.getElementById('loginEmail').value.trim(), password = document.getElementById('loginPass').value;
+    let session;
+    if (password){
+      const result = await sb.auth.signInWithPassword({email,password});
+      if (result.error) throw new Error(result.error.message);
+      session = result.data.session;
+    } else session = (await sb.auth.getSession()).data.session;
+    document.getElementById('loginPass').value = '';
+    if (!session?.access_token) throw new Error('Sign in to your existing account to prove ownership.');
+    const response = await fetch('/api/link', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({legacyAccessToken:session.access_token})});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error);
+    loginMsg.textContent = 'Account linked. Your shared username is @' + pixelUser.name + '. Your device-local maps are unchanged.';
+  } catch(e){ loginMsg.textContent = e.message || 'Old account service unavailable. Your maps are unchanged.'; }
+  finally { button.disabled = false; }
+};
 document.getElementById('bGuest').onclick = () => { setUser(null); showPage('players'); };
-bSignOut.onclick = async () => { if (sb) await sb.auth.signOut(); setUser(null); showPage('login'); };
+bSignOut.onclick = async () => {
+  try {
+    if (pixelUser){ const response = await fetch('/api/auth/sign-out', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); if (!response.ok) throw new Error(); }
+    if (sb) await sb.auth.signOut();
+    pixelUser = null; setUser(null); location.assign('/');
+  } catch(e){ acctLine.textContent = 'Could not sign out. Please retry.'; }
+};
 
 function showTouchUI(on){
   stick.classList.toggle('hidden', !on);
