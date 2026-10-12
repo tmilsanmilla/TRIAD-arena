@@ -41,6 +41,9 @@ try{
   for(const [,script]of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(script.trim())new vm.Script(script);
   assert.ok(html.includes("localStorage.getItem('triadCustomMap')"));
   assert.ok(html.includes('CONTINUE WITH PIXEL PULSE'));checks+=2;
+  const created=await (await auth.$context).internalAdapter.createUser({name:`${prefix}_x`,email:`${prefix}_x@example.invalid`,emailVerified:false});
+  ids.push(created.id);
+  assert.equal(created.username,created.name);checks++;
   console.log(JSON.stringify({passed:true,checks,coverage:'strict origins, independent proof, no email-only links, unavailable legacy service, unique bidirectional bindings, idempotency, retained game syntax/maps'}));
 }finally{
   globalThis.fetch=nativeFetch;auth.api.getSession=originalGetSession;
