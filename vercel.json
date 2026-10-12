@@ -1,5 +1,5 @@
 {
   "outputDirectory": "public",
   "cleanUrls": true,
-  "rewrites": [{ "source": "/api/auth/:authPath*", "destination": "/api/auth?authPath=:authPath" }]
+  "rewrites": [{ "source": "/api/auth/:authPath*", "destination": "/api/pixel?authPath=:authPath" }]
 }
